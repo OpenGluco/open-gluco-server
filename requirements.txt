@@ -1,0 +1,21 @@
+fastapi
+uvicorn[standard]
+
+# PostgreSQL
+psycopg[binary]
+
+# InfluxDB client
+influxdb-client
+
+# (optionnel) Pour l’environnement
+python-dotenv
+
+pydexcom
+
+git+https://github.com/OpenGluco/libre-linkup-py.git
+
+Flask
+
+PyJWT
+
+werkzeug
