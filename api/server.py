@@ -8,6 +8,7 @@ import psycopg
 import jwt
 import os
 from dotenv import load_dotenv
+from functools import wraps
 
 load_dotenv()
 
@@ -127,11 +128,6 @@ def run(users:[], ip:str="0.0.0.0", port:int=5000):
 
         except Exception as e:
             return jsonify({"error": f"{str(e)}"}), 500
-        
-    # @app.route("/postCGMCredentials")
-    # def postCredentials():
-    #     global actual_data,last_check_time
-        
     
     def actualize_CGM():
         print(f"new data approaching %s"%(int(time())))
@@ -154,3 +150,31 @@ def run(users:[], ip:str="0.0.0.0", port:int=5000):
     actualize_CGM()
     
     app.run(ip, port)
+    
+    
+
+
+# Décorateur pour protéger une route
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        # On récupère le header "Authorization: Bearer <token>"
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+                   
+        if not token:
+            return jsonify({"error": "Missing token"}), 401
+           
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Expired token"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+           
+        # On passe la payload au handler de la route
+        return f(payload, *args, **kwargs)
+    return decorated
