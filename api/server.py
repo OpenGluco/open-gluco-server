@@ -128,6 +128,29 @@ def run(users:[], ip:str="0.0.0.0", port:int=5000):
 
         except Exception as e:
             return jsonify({"error": f"{str(e)}"}), 500
+        
+    @app.route("/postCGMCredentials", methods=['POST'])
+    @token_required
+    def postCredentials(payload):
+        data = request.get_json()
+        
+        try:
+            with db_conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO connections (user_id, username, password, type, region) VALUES (%s, %s, %s, %s, %s)",
+                    (payload["user_id"], data.get("username"), generate_password_hash(data.get("password")), data.get("type"), data.get("region"))
+                )
+            db_conn.commit()
+            return jsonify({"message": f"Connection added to user {payload['user_id']}."}), 201
+        
+        except psycopg.errors.UniqueViolation:
+            db_conn.rollback()
+            return jsonify({"error": "Connection already exists."}), 409
+        
+        except Exception as e:
+            db_conn.rollback()
+            return jsonify({"error": f"Internal Error : {str(e)}"}), 500
+    
     
     def actualize_CGM():
         print(f"new data approaching %s"%(int(time())))
