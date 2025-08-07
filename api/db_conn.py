@@ -1,7 +1,11 @@
 import psycopg
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 def init_db():
-    conn = psycopg.connect("dbname=openglucodb user=opengluco password=sugarbase host=postgres")
+    conn = psycopg.connect(f"dbname={os.getenv("POSTGRES_DB")} user={os.getenv("POSTGRES_USER")} password={os.getenv("POSTGRES_PASSWORD")} host={os.getenv("POSTGRES_HOST")}")
     with conn:
         with conn.cursor() as cur:
             cur.execute("""
