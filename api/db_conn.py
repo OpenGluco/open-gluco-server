@@ -22,6 +22,7 @@ def init_db():
                           "surname" varchar,
                           "email" varchar,
                           "password" varchar,
+                          "verified" bool DEFAULT false,
                           "created_at" timestamp
                         );
                         CREATE TABLE IF NOT EXISTS "connections" (

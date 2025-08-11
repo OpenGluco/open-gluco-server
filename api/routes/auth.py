@@ -29,11 +29,11 @@ def login():
     try:
         with db_conn.cursor() as cur:
             cur.execute(
-                "SELECT id, password FROM users WHERE email = %s", (email,))
+                "SELECT id, password, verified FROM users WHERE email = %s", (email,))
             result = cur.fetchone()
         if result is None:
             return jsonify({"error": "Nom d'utilisateur incorrect"}), 404
-        user_id, stored_hash = result
+        user_id, stored_hash, verified = result
         if check_password_hash(stored_hash, password):
             payload = {
                 "user_id": user_id,
@@ -43,7 +43,7 @@ def login():
                 ),  # token expire dans 2h
             }
             token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-            return jsonify({"token": token}), 200
+            return jsonify({"token": token, "verified": verified}), 200
         else:
             return jsonify({"error": "Mot de passe incorrect"}), 401
 
