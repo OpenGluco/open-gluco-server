@@ -9,6 +9,7 @@ import importlib
 import pkgutil
 from dotenv import load_dotenv
 from functools import wraps
+from flask_cors import CORS
 
 load_dotenv()
 
@@ -19,6 +20,7 @@ package = routes
 
 def run(users: [], ip: str = "0.0.0.0", port: int = 5000):
     app = Flask(__name__)
+    CORS(app)
     global db_conn
 
     for loader, module_name, is_pkg in pkgutil.iter_modules(package.__path__):

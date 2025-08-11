@@ -19,3 +19,5 @@ Flask
 PyJWT
 
 werkzeug
+
+flask-cors
