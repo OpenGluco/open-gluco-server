@@ -3,3 +3,4 @@ configs/credentials.json
 /api/__pycache__
 .env
 .vscode/
+connecttodb.bat
