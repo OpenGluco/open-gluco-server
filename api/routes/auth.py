@@ -37,7 +37,7 @@ def login():
                 "SELECT id, password, verified FROM users WHERE email = %s", (email,))
             result = cur.fetchone()
         if result is None:
-            return jsonify({"error": "Nom d'utilisateur incorrect"}), 404
+            return jsonify({"error": "Wrong email"}), 404
         user_id, stored_hash, verified = result
         if check_password_hash(stored_hash, password):
             payload = {
@@ -50,7 +50,7 @@ def login():
             token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
             return jsonify({"token": token, "verified": verified}), 200
         else:
-            return jsonify({"error": "Mot de passe incorrect"}), 401
+            return jsonify({"error": "Wrong password"}), 401
 
     except Exception as e:
         return jsonify({"error": f"{str(e)}"}), 500
@@ -103,9 +103,9 @@ def verify_email():
         return jsonify({"message": "Successfully verified account."}), 200
 
     except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Lien expiré"}), 400
+        return jsonify({"error": "Expired link"}), 400
     except jwt.InvalidTokenError:
-        return jsonify({"error": "Token invalide"}), 400
+        return jsonify({"error": "Invalid token"}), 400
 
 
 def send_verification_email(to_email, name):
@@ -134,4 +134,4 @@ def send_verification_email(to_email, name):
         server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
         server.send_message(msg)
 
-    print(f"✅ Mail de vérification envoyé à {to_email}")
+    print(f"✅ Verification email sent to {to_email}")
