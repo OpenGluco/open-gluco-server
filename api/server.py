@@ -1,15 +1,17 @@
-from flask import Flask, request, jsonify, Blueprint
-from time import time
-import threading
-from .db_conn import init_db, get_conn
-from . import routes
-import jwt
-import os
 import importlib
+import os
 import pkgutil
-from dotenv import load_dotenv
+import threading
 from functools import wraps
+from time import time
+
+import jwt
+from dotenv import load_dotenv
+from flask import Blueprint, Flask, jsonify, request
 from flask_cors import CORS
+
+from . import routes
+from .db_conn import get_conn, init_db
 
 load_dotenv()
 
@@ -110,10 +112,8 @@ def token_required(f):
     def decorated(*args, **kwargs):
         token = None
         # On récupère le header "Authorization: Bearer <token>"
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            if auth_header.startswith("Bearer "):
-                token = auth_header.split(" ")[1]
+        if 'opengluco_token' in request.cookies:
+            token = request.cookies.get('opengluco_token')
 
         if not token:
             return jsonify({"error": "Missing token"}), 401
