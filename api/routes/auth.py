@@ -1,16 +1,15 @@
-from flask import Blueprint, request, jsonify
-
-from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
-import psycopg
-import jwt
 import os
-from datetime import datetime, timedelta
-from ..db_conn import get_conn
-
-from email.mime.text import MIMEText
-from datetime import datetime, timedelta
 import smtplib
+from datetime import datetime, timedelta
+from email.mime.text import MIMEText
+
+import jwt
+import psycopg
+from dotenv import load_dotenv
+from flask import Blueprint, jsonify, make_response, request
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from ..db_conn import get_conn
 
 bp = Blueprint("auth", __name__)
 
@@ -20,6 +19,8 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("JWT_SECRET")
 DOMAIN_NAME = os.getenv("DOMAIN_NAME")
+
+HTTPS_ENABLED = os.getenv("HTTPS", "false").lower() == "true"
 
 
 @bp.route("/login", methods=["POST"])
@@ -48,7 +49,16 @@ def login():
                 ),  # token expire dans 2h
             }
             token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-            return jsonify({"token": token, "verified": verified}), 200
+            resp = make_response(
+                jsonify({"message": "Login successful", "verified": verified}))
+            resp.set_cookie(
+                "opengluco_token",
+                token,
+                httponly=True,
+                secure=HTTPS_ENABLED,
+                samesite="Strict"
+            )
+            return resp, 200
         else:
             return jsonify({"error": "Wrong password"}), 401
 
