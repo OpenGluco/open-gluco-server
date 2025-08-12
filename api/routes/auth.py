@@ -95,6 +95,14 @@ def signup():
         return jsonify({"error": f"Internal Error : {str(e)}"}), 500
 
 
+@bp.route("/logout", methods=["POST"])
+def logout():
+    resp = make_response(jsonify({"message": "logged out"}))
+    resp.delete_cookie("opengluco_token", samesite="Strict",
+                       secure=HTTPS_ENABLED)
+    return resp, 200
+
+
 @bp.route("/verify", methods=["GET"])
 def verify_email():
     token = request.args.get("token")
