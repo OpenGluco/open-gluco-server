@@ -22,7 +22,8 @@ package = routes
 
 def run(users: [], ip: str = "0.0.0.0", port: int = 5000):
     app = Flask(__name__)
-    CORS(app)
+    CORS(app, resources={
+         r"/*": {"origins": [os.getenv("FRONTEND_URL", "http://localhost:5173/")]}}, supports_credentials=True)
     global db_conn
 
     for loader, module_name, is_pkg in pkgutil.iter_modules(package.__path__):
