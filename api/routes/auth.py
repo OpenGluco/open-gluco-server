@@ -19,6 +19,7 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("JWT_SECRET")
 DOMAIN_NAME = os.getenv("DOMAIN_NAME")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173/")
 
 HTTPS_ENABLED = os.getenv("HTTPS", "false").lower() == "true"
 
@@ -186,7 +187,7 @@ def send_verification_email(to_email, name):
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-    verify_link = f"http://{DOMAIN_NAME}:5000/verify?token={token}"
+    verify_link = f"{FRONTEND_URL}/verify-email?token={token}"
 
     subject = "[OpenGluco] Verify your account"
     body = f"Hello {name} and welcome to Opengluco!\n\nPlease follow the link below to verify your account:\n\n{verify_link}"
@@ -213,7 +214,7 @@ def send_password_reset_email(to_email, user_id, name):
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-    reset_link = f"{os.getenv("FRONTEND_URL", "http://localhost:5173/")}/password?token={token}"
+    reset_link = f"{FRONTEND_URL}/password?token={token}"
 
     subject = "[OpenGluco] Reset your password"
     body = f"Hello {name}!\n\nPlease follow the link below to reset your password:\n\n{reset_link}"
