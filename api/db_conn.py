@@ -23,6 +23,7 @@ def init_db():
                           "email" varchar,
                           "password" varchar,
                           "verified" bool DEFAULT false,
+                          "last_password_change" timestamp DEFAULT (now()),
                           "created_at" timestamp
                         );
                         CREATE TABLE IF NOT EXISTS "connections" (
