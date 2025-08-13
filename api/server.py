@@ -126,6 +126,15 @@ def token_required(f):
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
 
+        with db_conn.cursor() as cur:
+            cur.execute(
+                "SELECT last_password_change FROM users WHERE id=%s", (payload["user_id"],))
+            last_pwd_change = cur.fetchone()[0]
+
+        print(int(last_pwd_change.timestamp()), payload["iat"])
+        if last_pwd_change and payload["iat"] < int(last_pwd_change.timestamp()):
+            return jsonify({"error": "Token invalid due to password change"}), 401
+
         # On passe la payload au handler de la route
         return f(payload, *args, **kwargs)
     return decorated

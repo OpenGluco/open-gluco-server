@@ -44,6 +44,7 @@ def login():
             payload = {
                 "user_id": user_id,
                 "email": email,
+                "iat": int(datetime.now().timestamp()),
                 "exp": int(
                     (datetime.now() + timedelta(hours=2)).timestamp()
                 ),  # token expire dans 2h
@@ -103,6 +104,58 @@ def logout():
     return resp, 200
 
 
+@bp.route("/forgot_password", methods=["GET"])
+def forgot_password():
+    email = request.args.get("email")
+    if not email:
+        return jsonify({"error": "Missing email"}), 400
+
+    try:
+        with db_conn.cursor() as cur:
+            cur.execute(
+                "SELECT name, surname, email, id FROM users WHERE email = %s", (email,))
+            result = cur.fetchone()
+        if result is None:
+            return jsonify({"error": "User does not exist"}), 404
+
+        name, surname, email, user_id = result
+
+        send_password_reset_email(email, user_id, name)
+
+        return jsonify({"message": "✅ Email sent."}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Internal error: {e}"}), 500
+
+
+@bp.route("/password", methods=["PATCH"])
+def update_password():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data supplied."}), 400
+
+    token = request.args.get("token")
+    if not token:
+        return jsonify({"error": "Missing token"}), 400
+
+    try:
+        jwt_data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user_id = jwt_data["user_id"]
+        password = generate_password_hash(data.get("password"))
+
+        with db_conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET password = %s, last_password_change = %s WHERE id = %s", (password, datetime.now(), user_id))
+        db_conn.commit()
+
+        return jsonify({"message": "Successfully changed password."}), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Expired link"}), 400
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 400
+
+
 @bp.route("/verify", methods=["GET"])
 def verify_email():
     token = request.args.get("token")
@@ -127,17 +180,14 @@ def verify_email():
 
 
 def send_verification_email(to_email, name):
-    # 1️⃣ Créer un token qui expire dans 24h
     payload = {
         "email": to_email,
         "exp": datetime.now() + timedelta(hours=24)
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-    # 2️⃣ Lien de vérif (à adapter à ton domaine)
     verify_link = f"http://{DOMAIN_NAME}:5000/verify?token={token}"
 
-    # 3️⃣ Préparer le mail
     subject = "[OpenGluco] Verify your account"
     body = f"Hello {name} and welcome to Opengluco!\n\nPlease follow the link below to verify your account:\n\n{verify_link}"
 
@@ -146,7 +196,33 @@ def send_verification_email(to_email, name):
     msg["From"] = os.getenv("SMTP_FROM")
     msg["To"] = to_email
 
-    # 4️⃣ Envoi du mail
+    with smtplib.SMTP(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
+        server.starttls()
+        server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
+        server.send_message(msg)
+
+    print(f"✅ Verification email sent to {to_email}")
+
+
+def send_password_reset_email(to_email, user_id, name):
+    payload = {
+        "email": to_email,
+        "user_id": user_id,
+        "iat": int(datetime.now().timestamp()),
+        "exp": datetime.now() + timedelta(hours=24)
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+    reset_link = f"{os.getenv("FRONTEND_URL", "http://localhost:5173/")}/password?token={token}"
+
+    subject = "[OpenGluco] Reset your password"
+    body = f"Hello {name}!\n\nPlease follow the link below to reset your password:\n\n{reset_link}"
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = os.getenv("SMTP_FROM")
+    msg["To"] = to_email
+
     with smtplib.SMTP(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
         server.starttls()
         server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
