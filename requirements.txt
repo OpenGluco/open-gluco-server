@@ -21,3 +21,5 @@ PyJWT
 werkzeug
 
 flask-cors
+
+influxdb-client
