@@ -31,6 +31,7 @@ def init_db():
                           "user_id" integer,
                           "username" varchar,
                           "password" varchar,
+                          "token" varchar,
                           "type" varchar,
                           "account_id" varchar,
                           "region" varchar
