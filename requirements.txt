@@ -19,6 +19,7 @@ Flask
 PyJWT
 
 werkzeug
+cryptography
 
 flask-cors
 
