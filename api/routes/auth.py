@@ -79,6 +79,17 @@ def signup():
     email = data.get("email")
     password = generate_password_hash(data.get("password"))
 
+    try:
+        with db_conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM users WHERE email = %s", (email,))
+            result = cur.fetchone()
+        if result is not None:
+            return jsonify({"error": "Email already in use"}), 409
+
+    except Exception as e:
+        return jsonify({"error": f"{str(e)}"}), 500
+
     send_verification_email(email, name)
 
     try:
