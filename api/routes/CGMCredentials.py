@@ -1,11 +1,18 @@
-from flask import Blueprint, request, jsonify
-from werkzeug.security import generate_password_hash
-from ..server import token_required
-from ..db_conn import get_conn
+import os
+
 import psycopg
+from cryptography.fernet import Fernet
+from flask import Blueprint, jsonify, request
+from werkzeug.security import generate_password_hash
+
+from ..db_conn import get_conn
+from ..server import token_required
 
 bp = Blueprint("CGMCredentials", __name__)
 db_conn = get_conn()
+
+FERNET_KEY = os.getenv("FERNET_KEY").encode()
+f = Fernet(FERNET_KEY)
 
 
 @bp.route("/CGMCredentials", methods=['POST', 'GET'])
@@ -19,8 +26,8 @@ def credentials(payload):
             with db_conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO connections (user_id, username, password, type, region) VALUES (%s, %s, %s, %s, %s)",
-                    (payload["user_id"], data.get("username"), generate_password_hash(
-                        data.get("password")), data.get("type"), data.get("region"))
+                    (payload["user_id"], data.get("username"), f.encrypt(data.get("password").encode()).decode(),
+                     data.get("type"), data.get("region"))
                 )
             db_conn.commit()
             return jsonify({"message": f"Connection added to user {payload['user_id']}."}), 201
@@ -43,7 +50,6 @@ def credentials(payload):
                 result = cur.fetchall()
             if result is None:
                 return jsonify({"error": "Cannot find any connection for this user."}), 204
-            print(result)
             return jsonify({"message": f"Connections for user {payload['user_id']}", "data": result}), 200
 
         except Exception as e:
