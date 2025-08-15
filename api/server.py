@@ -6,21 +6,28 @@ from functools import wraps
 from time import time
 
 import jwt
+import requests
+from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 from flask import Blueprint, Flask, jsonify, request
 from flask_cors import CORS
+from libre_link_up import LibreLinkUpClient
+from pydexcom import Dexcom
 
 from . import routes
 from .db_conn import get_conn, init_db
+from .influx import read_from_influx, write_to_influx
 
 load_dotenv()
 
 SECRET_KEY = os.getenv("JWT_SECRET")
+FERNET_KEY = os.getenv("FERNET_KEY").encode()
+f = Fernet(FERNET_KEY)
 
 package = routes
 
 
-def run(users: [], ip: str = "0.0.0.0", port: int = 5000):
+def run(ip: str = "0.0.0.0", port: int = 5000):
     app = Flask(__name__)
     CORS(app, resources={
          r"/*": {"origins": [os.getenv("FRONTEND_URL", "http://localhost:5173/")]}}, supports_credentials=True)
@@ -33,20 +40,27 @@ def run(users: [], ip: str = "0.0.0.0", port: int = 5000):
             if isinstance(obj, Blueprint):
                 app.register_blueprint(obj)
                 print(
-                    f"✅ Blueprint '{obj.name}' enregistré depuis {module_name}.py")
+                    f"✅ Routes '{obj.name}' registered from {module_name}.py")
 
     init_db()
     db_conn = get_conn()
-    print(users)
     actual_data = []
     last_check_time = int(time())
-    for libre_user in users[1]:
-        for libre_key in libre_user:
-            libre_user[libre_key].login()
+
+    dexcom_users = []
+    libre_users = []
+
+    # write_to_influx(
+    #     measurement="glucose",
+    #     tags={"user_id": "123", "device": "dexcom"},
+    #     fields={"value": 85.6},
+    # )
+
+    # print(read_from_influx("123", "glucose"))
 
     @app.route("/")
     def hello_world():
-        return {'message': "Welcome to the OpenGluco API!"}
+        return {'message': "Welcome to the OpenGluco API!"}, 200
 
     # @app.route("/getCGMData")
     # def getCGMData():
@@ -54,65 +68,90 @@ def run(users: [], ip: str = "0.0.0.0", port: int = 5000):
     #     return {'time':last_check_time,
     #             'data':actual_data}
 
-    @app.route("/getCGMData")
-    def getCGMData():
-        global actual_data, last_check_time
-        # user_id = request.args.get("user_id")
-        # account_type = request.args.get("type")
-        # auth_header = request.headers.get("Authorization")
-
-        # try:
-        #     with db_conn.cursor() as cur:
-        #         cur.execute(
-        #             "SELECT username, source, timestamp FROM glucose_data WHERE user_id = %s ORDER BY timestamp DESC LIMIT %s",
-        #             (user, limit)
-        #         )
-        #         rows = cur.fetchall()
-        #     db_conn.commit()
-        #     return jsonify({"message": "Utilisateur enregistré"}), 201
-
-        # except psycopg.errors.UniqueViolation:
-        #     db_conn.rollback()
-        #     return jsonify({"error": "Nom d'utilisateur déjà utilisé"}), 409
-
-        # except Exception as e:
-        #     db_conn.rollback()
-        #     return jsonify({"error": f"Erreur interne : {str(e)}"}), 500
-
-        return {'time': last_check_time,
-                'data': actual_data}
-
     def actualize_CGM():
-        print(f"new data approaching %s" % (int(time())))
+        print("new data approaching %s" % (int(time())))
         global actual_data, last_check_time
         last_check_time = int(time())
         actual_data = []
-        for dexcom_users in users[0]:
-            for account_id in dexcom_users:
-                glucose_data = dexcom_users[account_id].get_current_glucose_reading(
-                )
-                if glucose_data != None:
-                    actual_data.append({account_id: glucose_data.mmol})
-                else:
-                    actual_data.append({account_id: -1})
-        for libre_users in users[1]:
-            for account_id in libre_users:
-                glucose_data = libre_users[account_id].get_raw_connection()
-                actual_data.append(
-                    {account_id: glucose_data['glucoseMeasurement']['Value']})
+
+        raw_dexcom_users = get_connections_by_type("Dexcom")
+        raw_libre_users = get_connections_by_type("LibreLinkUp")
+
+        for user in raw_dexcom_users:
+            if user['id'] not in raw_dexcom_users:
+                print("oui d")
+                dexcom_users.append({user['id']: Dexcom(
+                    username=user['username'],
+                    password=f.decrypt(user['password'].encode()).decode(),
+                    region=user['region']), "user_id": user["user_id"]})
+        for user in raw_libre_users:
+            if not any(u["user_id"] == user["user_id"] for u in libre_users):
+                print("oui l")
+                libre_users.append({user['id']: LibreLinkUpClient(
+                    username=user['username'],
+                    password=f.decrypt(user['password'].encode()).decode(),
+                    url=f"https://api-{user['region']}.libreview.io",
+                    version="4.14.0",
+                ), "user_id": user["user_id"]})
+
+        for libre_user in libre_users:
+            for libre_key in libre_user:
+                if type(libre_user[libre_key]) is LibreLinkUpClient:
+                    print(fetch_data_with_relogin(libre_user[libre_key]))
+        for dexcom_user in dexcom_users:
+            for dexcom_key in dexcom_user:
+                if type(dexcom_user[dexcom_key]) is Dexcom:
+                    print(
+                        dexcom_users[dexcom_key].get_current_glucose_reading().mmol)
+
         threading.Timer(60, actualize_CGM).start()
+
+    def get_connections_by_type(conn_type):
+        """
+        Get all the connections coming from the "connections" table that are of the specified type.
+        :param conn_type: string, connection type (ex: "Dexcom", "LibreLinkUp", "Medtronics")
+        :return: dict list
+        """
+        try:
+            with db_conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, user_id, username, password, type, region
+                    FROM connections
+                    WHERE type = %s
+                """, (conn_type,))
+
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+
+                results = [dict(zip(columns, row)) for row in rows]
+                return results
+
+        except Exception as e:
+            print(f"❌ Reading error: {e}")
+            return []
+
+    def fetch_data_with_relogin(client):
+        try:
+            return client.get_raw_connection()['glucoseMeasurement']['Value']
+        except requests.HTTPError as e:
+            if e.response.status_code in (400, 401, 403):
+                print("Expired token, trying to reconnect...")
+                client.login()
+                return client.get_raw_connection()['glucoseMeasurement']['Value']
+            else:
+                raise
 
     actualize_CGM()
 
     app.run(ip, port)
 
 
-# Décorateur pour protéger une route
+# Route token protection
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-        # On récupère le header "Authorization: Bearer <token>"
+
         if 'opengluco_token' in request.cookies:
             token = request.cookies.get('opengluco_token')
 
@@ -131,10 +170,10 @@ def token_required(f):
                 "SELECT last_password_change FROM users WHERE id=%s", (payload["user_id"],))
             last_pwd_change = cur.fetchone()[0]
 
-        print(int(last_pwd_change.timestamp()), payload["iat"])
+        # print(int(last_pwd_change.timestamp()), payload["iat"])
         if last_pwd_change and payload["iat"] < int(last_pwd_change.timestamp()):
             return jsonify({"error": "Token invalid due to password change"}), 401
 
-        # On passe la payload au handler de la route
+        # Get the payload to the route handler
         return f(payload, *args, **kwargs)
     return decorated
