@@ -2,12 +2,14 @@ import os
 from datetime import datetime
 
 from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.bucket_api import BucketsApi
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 INFLUX_URL = os.getenv("INFLUXDB_HOST", "http://localhost:8086")
 INFLUX_TOKEN = os.getenv("DOCKER_INFLUXDB_INIT_ADMIN_TOKEN")
 INFLUX_ORG = os.getenv("DOCKER_INFLUXDB_INIT_ORG")
 INFLUX_BUCKET = os.getenv("DOCKER_INFLUXDB_INIT_BUCKET")
+INFLUX_RETENTION = os.getenv("DOCKER_INFLUXDB_RETENTION", "30d")
 
 
 def write_to_influx(measurement, tags, fields, timestamp=None):
@@ -76,3 +78,49 @@ def read_from_influx(user_id, measurement="glucose", range_hours=24):
     except Exception as e:
         print(f"❌ Erreur lecture InfluxDB : {e}")
         return []
+
+
+def parse_retention(ret_str: str) -> int:
+    unit = ret_str[-1]
+    value = int(ret_str[:-1])
+    if unit == "d":
+        return value * 24 * 3600
+    elif unit == "h":
+        return value * 3600
+    elif unit == "m":
+        return value * 60
+    elif unit == "s":
+        return value
+    else:
+        raise ValueError("Format de durée non supporté (utilise d/h/m/s)")
+
+
+def init_influx_bucket():
+    try:
+        with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
+            buckets_api: BucketsApi = client.buckets_api()
+
+            retention_seconds = parse_retention(INFLUX_RETENTION)
+
+            # Vérifie si le bucket existe déjà
+            bucket = buckets_api.find_bucket_by_name(INFLUX_BUCKET)
+            if bucket is None:
+                # Création
+                bucket = buckets_api.create_bucket(
+                    bucket_name=INFLUX_BUCKET,
+                    org=INFLUX_ORG,
+                    retention_rules=[
+                        {"type": "expire", "everySeconds": retention_seconds}]
+                )
+                print(
+                    f"✅ Bucket '{INFLUX_BUCKET}' créé avec rétention {INFLUX_RETENTION}")
+            else:
+                # Mise à jour
+                bucket.retention_rules = [
+                    {"type": "expire", "everySeconds": retention_seconds}]
+                buckets_api.update_bucket(bucket)
+                print(
+                    f"♻️ Bucket '{INFLUX_BUCKET}' mis à jour avec rétention {INFLUX_RETENTION}")
+
+    except Exception as e:
+        print(f"❌ Erreur init InfluxDB bucket : {e}")

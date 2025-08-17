@@ -16,7 +16,7 @@ from pydexcom import Dexcom
 
 from . import routes
 from .db_conn import get_conn, init_db
-from .influx import read_from_influx, write_to_influx
+from .influx import init_influx_bucket, read_from_influx, write_to_influx
 
 load_dotenv()
 
@@ -43,18 +43,13 @@ def run(ip: str = "0.0.0.0", port: int = 5000):
                     f"✅ Routes '{obj.name}' registered from {module_name}.py")
 
     init_db()
+    init_influx_bucket()
     db_conn = get_conn()
     actual_data = []
     last_check_time = int(time())
 
     dexcom_users = []
     libre_users = []
-
-    # write_to_influx(
-    #     measurement="glucose",
-    #     tags={"user_id": "123", "device": "dexcom"},
-    #     fields={"value": 85.6},
-    # )
 
     # print(read_from_influx("123", "glucose"))
 
@@ -79,14 +74,12 @@ def run(ip: str = "0.0.0.0", port: int = 5000):
 
         for user in raw_dexcom_users:
             if user['id'] not in raw_dexcom_users:
-                print("oui d")
                 dexcom_users.append({user['id']: Dexcom(
                     username=user['username'],
                     password=f.decrypt(user['password'].encode()).decode(),
                     region=user['region']), "user_id": user["user_id"]})
         for user in raw_libre_users:
             if not any(u["user_id"] == user["user_id"] for u in libre_users):
-                print("oui l")
                 libre_users.append({user['id']: LibreLinkUpClient(
                     username=user['username'],
                     password=f.decrypt(user['password'].encode()).decode(),
@@ -95,14 +88,26 @@ def run(ip: str = "0.0.0.0", port: int = 5000):
                 ), "user_id": user["user_id"]})
 
         for libre_user in libre_users:
+            print("user", libre_user["user_id"])
             for libre_key in libre_user:
                 if type(libre_user[libre_key]) is LibreLinkUpClient:
-                    print(fetch_data_with_relogin(libre_user[libre_key]))
+                    write_to_influx(
+                        measurement="glucose",
+                        tags={
+                            "user_id": libre_user["user_id"], "device": "LibreLinkUp"},
+                        fields={"value": fetch_data_with_relogin(
+                            libre_user[libre_key])},
+                    )
         for dexcom_user in dexcom_users:
             for dexcom_key in dexcom_user:
                 if type(dexcom_user[dexcom_key]) is Dexcom:
-                    print(
-                        dexcom_users[dexcom_key].get_current_glucose_reading().mmol)
+                    write_to_influx(
+                        measurement="glucose",
+                        tags={
+                            "user_id": dexcom_user["user_id"], "device": "Dexcom"},
+                        fields={
+                            "value": dexcom_users[dexcom_key].get_current_glucose_reading().mmol},
+                    )
 
         threading.Timer(60, actualize_CGM).start()
 
