@@ -31,3 +31,7 @@ Now you can just run the command : `docker compose up -d --build` and everything
 
 If you want to cut all the services, just type `docker compose down`.
 After having cut the services, you can make them up again by using `docker compose up -d`.
+
+## About the InfluxDB
+
+You can notice gathered data is registered every 60 seconds to the database. An initial estimate indicates a potential of `50 MB` per year per user occupied on the disk.
