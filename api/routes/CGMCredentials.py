@@ -15,7 +15,7 @@ FERNET_KEY = os.getenv("FERNET_KEY").encode()
 f = Fernet(FERNET_KEY)
 
 
-@bp.route("/CGMCredentials", methods=['POST', 'GET'])
+@bp.route("/CGMCredentials", methods=['POST', 'GET', 'DELETE'])
 @token_required
 def credentials(payload):
 
@@ -44,13 +44,38 @@ def credentials(payload):
         try:
             with db_conn.cursor() as cur:
                 cur.execute(
-                    "SELECT username, type, region FROM connections WHERE user_id=%s",
+                    "SELECT id, username, type, region FROM connections WHERE user_id=%s",
                     (payload["user_id"],)
                 )
                 result = cur.fetchall()
             if result is None:
                 return jsonify({"error": "Cannot find any connection for this user."}), 204
             return jsonify({"message": f"Connections for user {payload['user_id']}", "data": result}), 200
+
+        except Exception as e:
+            return jsonify({"error": f"Internal Error : {str(e)}"}), 500
+
+    elif request.method == 'DELETE':
+        try:
+            data = request.get_json()
+
+            with db_conn.cursor() as cur:
+                cur.execute(
+                    "SELECT c.type, u.name FROM connections c JOIN users u ON c.user_id = u.id WHERE c.id=%s",
+                    (data.get("id"),)
+                )
+                result = cur.fetchone()
+            if result is None:
+                return jsonify({"error": "Cannot find any connection for user."}), 204
+
+            c_type, c_name = result
+
+            with db_conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM connections WHERE id=%s",
+                    (data.get("id"),)
+                )
+            return jsonify({"message": f"Connection {c_type} deleted for user {c_name}."}), 200
 
         except Exception as e:
             return jsonify({"error": f"Internal Error : {str(e)}"}), 500
