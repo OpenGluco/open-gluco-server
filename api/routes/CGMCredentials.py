@@ -65,17 +65,18 @@ def credentials(payload):
                     (data.get("id"),)
                 )
                 result = cur.fetchone()
-            if result is None:
-                return jsonify({"error": "Cannot find any connection for user."}), 204
+                if result is None:
+                    return jsonify({"error": "Cannot find any connection for user."}), 204
 
-            c_type, c_name = result
+                c_type, c_name = result
 
-            with db_conn.cursor() as cur:
                 cur.execute(
                     "DELETE FROM connections WHERE id=%s",
                     (data.get("id"),)
                 )
+            db_conn.commit()
             return jsonify({"message": f"Connection {c_type} deleted for user {c_name}."}), 200
 
         except Exception as e:
+            db_conn.rollback()
             return jsonify({"error": f"Internal Error : {str(e)}"}), 500
