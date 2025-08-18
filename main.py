@@ -1,3 +1,6 @@
-from api.server import run
+from api.logging_setup import setup_logging
+from api.server import create_app
 
-run()
+setup_logging()
+
+app = create_app()

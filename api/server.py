@@ -16,7 +16,7 @@ from pydexcom import Dexcom
 
 from . import routes
 from .db_conn import get_conn, init_db
-from .influx import init_influx_bucket, read_from_influx, write_to_influx
+from .influx import init_influx_bucket, write_to_influx
 
 load_dotenv()
 
@@ -27,7 +27,7 @@ f = Fernet(FERNET_KEY)
 package = routes
 
 
-def run(ip: str = "0.0.0.0", port: int = 5000):
+def create_app(ip: str = "0.0.0.0", port: int = 5000):
     app = Flask(__name__)
     CORS(app, resources={
          r"/*": {"origins": [os.getenv("FRONTEND_URL", "http://localhost:5173/")]}}, supports_credentials=True)
@@ -148,7 +148,7 @@ def run(ip: str = "0.0.0.0", port: int = 5000):
 
     actualize_CGM()
 
-    app.run(ip, port)
+    return app
 
 
 # Route token protection
