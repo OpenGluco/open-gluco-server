@@ -3,7 +3,7 @@ services:
     build: .
     container_name: opengluco-api
     ports:
-      - "5000:5000"
+      - "8000:8000"
     depends_on:
       - influxdb
       - postgres
@@ -40,6 +40,16 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
 
 volumes:
   influxdb_data:

@@ -24,3 +24,5 @@ cryptography
 flask-cors
 
 influxdb-client
+
+gunicorn

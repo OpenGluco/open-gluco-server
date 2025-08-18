@@ -4,3 +4,4 @@ configs/credentials.json
 .env
 .vscode/
 connecttodb.bat
+nginx.conf
