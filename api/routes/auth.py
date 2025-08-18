@@ -208,8 +208,7 @@ def send_verification_email(to_email, name):
     msg["From"] = os.getenv("SMTP_FROM")
     msg["To"] = to_email
 
-    with smtplib.SMTP(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
-        server.starttls()
+    with smtplib.SMTP_SSL(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
         server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
         server.send_message(msg)
 
@@ -235,8 +234,7 @@ def send_password_reset_email(to_email, user_id, name):
     msg["From"] = os.getenv("SMTP_FROM")
     msg["To"] = to_email
 
-    with smtplib.SMTP(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
-        server.starttls()
+    with smtplib.SMTP_SSL(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
         server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
         server.send_message(msg)
 
