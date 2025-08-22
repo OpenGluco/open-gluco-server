@@ -13,6 +13,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    restart: unless-stopped
 
   influxdb:
     image: influxdb:2.7
@@ -28,6 +29,7 @@ services:
       - DOCKER_INFLUXDB_INIT_ORG=${DOCKER_INFLUXDB_INIT_ORG}
       - DOCKER_INFLUXDB_INIT_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET}
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN}
+    restart: unless-stopped
 
   postgres:
     image: postgres:latest
@@ -40,6 +42,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    restart: unless-stopped
 
   nginx:
     image: nginx:latest
@@ -52,6 +55,7 @@ services:
       - "443:443"
     depends_on:
       - api
+    restart: unless-stopped
 
   certbot:
     image: certbot/certbot
