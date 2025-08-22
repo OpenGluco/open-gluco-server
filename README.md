@@ -18,10 +18,11 @@ print(key.decode()) # Copy this result
 
 Of course, this script requires to install the cryptography lib: `pip install cryptography`
 
-### 2. Fill in .env file
+### 2. Fill in .env & nginx.conf files
 
 Create a copy the `.env.example` file named `.env` and fill in the different variables.
 Don't forget to copy the key you got in the previous step into the `FERNET_KEY` variable.
+Also create copy of the `nginx.conf.example` file named `nginx.conf` and configure it according to your server's needs.
 
 ### 3. Run the project
 
