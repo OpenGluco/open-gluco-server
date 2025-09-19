@@ -212,7 +212,7 @@ def send_verification_email(to_email, name):
         server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
         server.send_message(msg)
 
-    print(f"✅ Verification email sent to {to_email}")
+    # print(f"✅ Verification email sent to {to_email}")
 
 
 def send_password_reset_email(to_email, user_id, name):
@@ -238,4 +238,4 @@ def send_password_reset_email(to_email, user_id, name):
         server.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
         server.send_message(msg)
 
-    print(f"✅ Verification email sent to {to_email}")
+    # print(f"✅ Verification email sent to {to_email}")

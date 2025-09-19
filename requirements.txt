@@ -10,7 +10,7 @@ influxdb-client
 # (optionnel) Pour l’environnement
 python-dotenv
 
-pydexcom
+git+https://github.com/OpenGluco/pydexcom.git
 
 git+https://github.com/OpenGluco/libre-linkup-py.git
 

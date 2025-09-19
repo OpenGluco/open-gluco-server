@@ -64,7 +64,6 @@ def create_app(ip: str = "0.0.0.0", port: int = 5000):
     #             'data':actual_data}
 
     def actualize_CGM():
-        print("new data approaching %s" % (int(time())))
         global actual_data, last_check_time
         last_check_time = int(time())
         actual_data = []
@@ -72,12 +71,24 @@ def create_app(ip: str = "0.0.0.0", port: int = 5000):
         raw_dexcom_users = get_connections_by_type("Dexcom")
         raw_libre_users = get_connections_by_type("LibreLinkUp")
 
+        # Removing users not in database anymore
+        for user in dexcom_users:
+            if not any(u["user_id"] == user["user_id"] for u in raw_dexcom_users):
+                dexcom_users.remove(user)
+        for user in libre_users:
+            if not any(u["user_id"] == user["user_id"] for u in raw_libre_users):
+                libre_users.remove(user)
+
+        # Adding new users to actualization list
         for user in raw_dexcom_users:
-            if user['id'] not in raw_dexcom_users:
+            if not any(u["user_id"] == user["user_id"] for u in dexcom_users):
+                region = user['region']
+                if not (user['region'] == 'us' and user['region'] == 'jp'):
+                    region = 'ous'
                 dexcom_users.append({user['id']: Dexcom(
                     username=user['username'],
                     password=f.decrypt(user['password'].encode()).decode(),
-                    region=user['region']), "user_id": user["user_id"]})
+                    region=region), "user_id": user["user_id"]})
         for user in raw_libre_users:
             if not any(u["user_id"] == user["user_id"] for u in libre_users):
                 libre_users.append({user['id']: LibreLinkUpClient(
@@ -87,27 +98,35 @@ def create_app(ip: str = "0.0.0.0", port: int = 5000):
                     version="4.14.0",
                 ), "user_id": user["user_id"]})
 
+        # Actualize CGM Data
         for libre_user in libre_users:
-            print("user", libre_user["user_id"])
             for libre_key in libre_user:
                 if type(libre_user[libre_key]) is LibreLinkUpClient:
-                    write_to_influx(
-                        measurement="glucose",
-                        tags={
-                            "user_id": libre_user["user_id"], "device": "LibreLinkUp"},
-                        fields={"value": fetch_data_with_relogin(
-                            libre_user[libre_key])},
-                    )
+                    data = fetch_data_with_relogin(libre_user[libre_key])
+                    if data is not None:
+                        write_to_influx(
+                            measurement="glucose",
+                            tags={
+                                "user_id": libre_user["user_id"], "device": "LibreLinkUp"},
+                            fields={"value": data},
+                        )
         for dexcom_user in dexcom_users:
             for dexcom_key in dexcom_user:
                 if type(dexcom_user[dexcom_key]) is Dexcom:
-                    write_to_influx(
-                        measurement="glucose",
-                        tags={
-                            "user_id": dexcom_user["user_id"], "device": "Dexcom"},
-                        fields={
-                            "value": dexcom_users[dexcom_key].get_current_glucose_reading().mmol},
-                    )
+                    glucose_reading = None
+                    try:
+                        glucose_reading = dexcom_user[dexcom_key].get_current_glucose_reading(
+                        )
+                    except Exception as e:
+                        glucose_reading = None
+                    if glucose_reading is not None:
+                        write_to_influx(
+                            measurement="glucose",
+                            tags={
+                                "user_id": dexcom_user["user_id"], "device": "Dexcom"},
+                            fields={
+                                "value": glucose_reading.mmol},
+                        )
 
         threading.Timer(60, actualize_CGM).start()
 
@@ -135,16 +154,23 @@ def create_app(ip: str = "0.0.0.0", port: int = 5000):
             print(f"❌ Reading error: {e}")
             return []
 
-    def fetch_data_with_relogin(client):
+    def fetch_data_with_relogin(client: LibreLinkUpClient):
         try:
+            connection = client.get_raw_connection()
             return client.get_raw_connection()['glucoseMeasurement']['Value']
-        except requests.HTTPError as e:
-            if e.response.status_code in (400, 401, 403):
-                print("Expired token, trying to reconnect...")
-                client.login()
-                return client.get_raw_connection()['glucoseMeasurement']['Value']
+        except Exception as e:
+            if type(e) is requests.HTTPError:
+                if e.response.status_code in (400, 401, 403):
+                    client.login()
+                    try:
+                        connection = client.get_raw_connection()
+                        return connection['glucoseMeasurement']['Value']
+                    except Exception as e:
+                        return None
+                else:
+                    print(e)
             else:
-                raise
+                print(e)
 
     actualize_CGM()
 

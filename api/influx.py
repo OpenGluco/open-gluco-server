@@ -38,7 +38,7 @@ def write_to_influx(measurement, tags, fields, timestamp=None):
 
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG,
                             record=point, write_precision=WritePrecision.NS)
-            print(f"✅ Données envoyées dans InfluxDB : {measurement} {fields}")
+            # print(f"✅ Données envoyées dans InfluxDB : {measurement} {fields}")
     except Exception as e:
         print(f"❌ Erreur InfluxDB : {e}")
 

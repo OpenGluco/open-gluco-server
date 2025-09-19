@@ -3,6 +3,8 @@ import os
 import psycopg
 from cryptography.fernet import Fernet
 from flask import Blueprint, jsonify, request
+from libre_link_up import LibreLinkUpClient
+from pydexcom import Dexcom
 from werkzeug.security import generate_password_hash
 
 from ..db_conn import get_conn
@@ -21,6 +23,28 @@ def credentials(payload):
 
     if request.method == 'POST':
         data = request.get_json()
+
+        try:
+            match data.get("type"):
+                case "Dexcom":
+                    region = data['region']
+                    if not (data['region'] == 'us' and data['region'] == 'jp'):
+                        region = 'ous'
+                    Dexcom(
+                        username=data['username'],
+                        password=data['password'],
+                        region=region
+                    )
+                case "LibreLinkUp":
+                    LibreLinkUpClient(
+                        username=data['username'],
+                        password=data['password'],
+                        url=f"https://api-{data['region']}.libreview.io",
+                        version="4.14.0",
+                    ).login()
+        except Exception as e:
+            print(e)
+            return jsonify({"error": f"Can't connect to {data.get("type")}.\n{e}"}), 500
 
         try:
             with db_conn.cursor() as cur:
