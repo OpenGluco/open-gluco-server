@@ -1,3 +1,4 @@
+import hashlib
 import os
 import smtplib
 from datetime import datetime, timedelta
@@ -10,6 +11,7 @@ from flask import Blueprint, jsonify, make_response, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..db_conn import get_conn
+from ..server import token_required
 
 bp = Blueprint("auth", __name__)
 
@@ -29,6 +31,7 @@ def login():
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
+    remember_me = data.get("remember_me", False)
 
     if not email or not password:
         return jsonify({"error": "email et password requis"}), 400
@@ -60,6 +63,29 @@ def login():
                 secure=HTTPS_ENABLED,
                 samesite="Strict"
             )
+
+            if remember_me:
+                raw_token = os.urandom(32).hex()
+                token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+                expires = datetime.now() + timedelta(days=365)
+                with db_conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO remember_tokens (user_id, token_hash, expires_at, user_agent, ip_address) VALUES (%s, %s, %s, %s, %s)",
+                        (user_id, token_hash, expires,
+                         request.user_agent.string, request.remote_addr)
+                    )
+                db_conn.commit()
+
+                resp.set_cookie(
+                    "opengluco_remember_me",
+                    raw_token,
+                    httponly=True,
+                    secure=True,
+                    samesite="Strict",
+                    expires=expires
+                )
+
             return resp, 200
         else:
             return jsonify({"error": "Wrong password"}), 401
@@ -113,6 +139,25 @@ def logout():
     resp = make_response(jsonify({"message": "logged out"}))
     resp.delete_cookie("opengluco_token", samesite="Strict",
                        secure=HTTPS_ENABLED)
+    raw_token = request.cookies.get("opengluco_remember_me")
+
+    if raw_token:
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        try:
+            with db_conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM remember_tokens WHERE token_hash = %s",
+                    (token_hash,)
+                )
+                # TODO: fix bug, suppression marche pas
+            db_conn.commit()
+        except Exception as e:
+            db_conn.rollback()
+            return jsonify({"error": f"Internal Error : {str(e)}"}), 500
+
+    resp.delete_cookie("opengluco_remember_me",
+                       samesite="Strict", secure=HTTPS_ENABLED)
     return resp, 200
 
 

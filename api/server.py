@@ -1,7 +1,9 @@
+import hashlib
 import importlib
 import os
 import pkgutil
 import threading
+from datetime import datetime, timedelta
 from functools import wraps
 from time import time
 
@@ -9,7 +11,7 @@ import jwt
 import requests
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
-from flask import Blueprint, Flask, jsonify, request
+from flask import Blueprint, Flask, g, jsonify, make_response, request
 from flask_cors import CORS
 from libre_link_up import LibreLinkUpClient
 from pydexcom import Dexcom
@@ -171,6 +173,101 @@ def create_app(ip: str = "0.0.0.0", port: int = 5000):
                     print(e)
             else:
                 print(e)
+
+    @app.before_request
+    def auto_refresh_from_remember_me():
+        # on ignore certains endpoints
+        if request.endpoint in ("login", "signup", "forgot_password", "password", "verify"):
+            return
+
+        # Si déjà un JWT présent, on ne touche pas
+        if "opengluco_token" in request.cookies:
+            return
+
+        # Sinon, on regarde s’il y a un cookie remember_me
+        raw_token = request.cookies.get("opengluco_remember_me")
+        if not raw_token:
+            return  # pas de session persistante
+
+        try:
+            token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+            with db_conn.cursor() as cur:
+                cur.execute(
+                    "SELECT r.user_id, r.expires_at, u.email, r.id, r.expires_at FROM remember_tokens r JOIN users u ON r.user_id = u.id WHERE r.token_hash=%s", (token_hash,))
+                result = cur.fetchone()
+            if result is None:
+                return jsonify({"error": "User or token does not exist"}), 404
+        except Exception as e:
+            print(e)
+            return jsonify({"error": "Internal server error"}), 500
+
+        user_id, expires_at, email, r_id, r_expires_at = result
+
+        if result and expires_at > datetime.now():
+            # On recrée un nouveau JWT
+            payload = {
+                "user_id": user_id,
+                "email": email,
+                "iat": int(datetime.now().timestamp()),
+                "exp": int(
+                    (datetime.now() + timedelta(hours=2)).timestamp()
+                ),  # token expire dans 2h
+            }
+            new_jwt = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+            # rotation du remember_me pour éviter la réutilisation
+            raw_new_remember = os.urandom(32).hex()
+            new_remember = hashlib.sha256(
+                raw_new_remember.encode()).hexdigest()
+            try:
+                with db_conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE remember_tokens SET token_hash = %s WHERE id = %s", (new_remember, r_id))
+                db_conn.commit()
+            except Exception as e:
+                print(e)
+                return jsonify({"error": "Internal server error"}), 500
+
+            request.cookies = request.cookies.to_dict()
+            request.cookies["opengluco_token"] = new_jwt
+
+            g.refresh_cookies = {
+                "opengluco_token": {"value": new_jwt, "max_age": None, "expires": None, "samesite": "Lax"},
+                "opengluco_remember_me": {"value": raw_new_remember, "expires": expires_at, "samesite": "Strict"}
+            }
+
+        return None
+
+    @app.after_request
+    def attach_refresh_cookies(response):
+        HTTPS_ENABLED = os.getenv("HTTPS", "false").lower() == "true"
+        cookies = getattr(g, "refresh_cookies", None)
+        if not cookies:
+            return response
+
+        # Cookie JWT
+        tk = cookies["opengluco_token"]
+        response.set_cookie(
+            "opengluco_token",
+            tk["value"],
+            httponly=True,
+            secure=HTTPS_ENABLED,
+            samesite="Strict"
+        )
+
+        # Cookie remember_me
+        rm = cookies["opengluco_remember_me"]
+        response.set_cookie(
+            "opengluco_remember_me",
+            rm["value"],
+            httponly=True,
+            secure=HTTPS_ENABLED,
+            samesite="Strict",
+            expires=rm.get("expires")
+        )
+
+        return response
 
     actualize_CGM()
 
