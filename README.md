@@ -1,4 +1,4 @@
-# open-gluco-server
+# OpenGluco API server
 
 REST API server application for open-gluco.
 
@@ -35,3 +35,25 @@ After having cut the services, you can make them up again by using `docker compo
 ## About the InfluxDB
 
 You can notice gathered data is registered every 60 seconds to the database. An initial estimate indicates a potential of `50 MB` per year per user occupied on the disk.
+
+## Endpoints
+
+### Basic routes
+
+- `/` [GET]: returns a welcome message
+- `/user` [GET]: returns data from logged in user
+
+### Authentication routes
+
+- `/signup` [POST]: allows signing up with JSON data `email` (string), `name` (string), `surname` (string), `password` (string)
+- `/login` [POST]: allows logging in with JSON data `email` (string), `password` (string), `remember_me` (boolean)
+- `/logout` [POST]: ends session
+- `/forgot_password` [GET]: triggers reset password email with GET parameter `email`
+- `/password` [PATCH]: update password with token got from reset password email
+- `/verify` [GET]: checks email verification with GET parameter `email`
+- `/ask_verify` [GET]: sends verification email again, in case the token has expired
+
+### CGM routes
+
+- `/CGMCredentials` [POST, GET, DELETE]: allows you to send, get or delete credentials for CGM providers apps
+- `/CGMData` [GET]: allows you to get glucose data with optional GET parameter`period` (values: 'w' (week), 'm' (month), 'y' (year))
