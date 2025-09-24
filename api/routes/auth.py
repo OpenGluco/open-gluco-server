@@ -236,6 +236,30 @@ def verify_email():
         return jsonify({"error": "Invalid token"}), 400
 
 
+@bp.route("/ask_verify", methods=["GET"])
+@token_required
+def ask_verify(payload):
+
+    try:
+        user_id = payload["user_id"]
+
+        with db_conn.cursor() as cur:
+            cur.execute(
+                "SELECT name, email FROM users WHERE id = %s", (user_id,))
+            result = cur.fetchone()
+        if result is None:
+            return jsonify({"error": "User does not exist"}), 404
+
+        name, email = result
+
+        send_verification_email(email, name)
+
+        return jsonify({"message": "Successfully sent verification email."}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Internal error: {e}"}), 500
+
+
 def send_verification_email(to_email, name):
     payload = {
         "email": to_email,
