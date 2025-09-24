@@ -68,7 +68,7 @@ def login():
                 raw_token = os.urandom(32).hex()
                 token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
-                expires = datetime.now() + timedelta(days=365)
+                expires = datetime.now() + timedelta(days=91)
                 with db_conn.cursor() as cur:
                     cur.execute(
                         "INSERT INTO remember_tokens (user_id, token_hash, expires_at, user_agent, ip_address) VALUES (%s, %s, %s, %s, %s)",
