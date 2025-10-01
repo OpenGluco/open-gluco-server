@@ -163,16 +163,23 @@ def create_app(ip: str = "0.0.0.0", port: int = 5000):
         except Exception as e:
             if type(e) is requests.HTTPError:
                 if e.response.status_code in (400, 401, 403):
-                    client.login()
                     try:
+                        client.login()
                         connection = client.get_raw_connection()
                         return connection['glucoseMeasurement']['Value']
                     except Exception as e:
-                        return None
+                        if type(e) is not KeyError:
+                            print(f'Error: {e}')
+                        else:
+                            return None
                 else:
-                    print(e)
+                    print(f'Error: {e}')
+                    return None
+            elif type(e) is KeyError:
+                return None
             else:
-                print(e)
+                print(f'Error: {e}')
+                return None
 
     @app.before_request
     def auto_refresh_from_remember_me():
